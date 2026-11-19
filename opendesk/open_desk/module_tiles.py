@@ -36,6 +36,18 @@ _TILE = (
 	"M38.5714 0H15.4286C6.90761 0 0 6.90761 0 15.4286V38.5714C0 47.0924 6.90761 54 15.4286 54"
 	"H38.5714C47.0924 54 54 47.0924 54 38.5714V15.4286C54 6.90761 47.0924 0 38.5714 0Z"
 )
+# The desk's stylesheet is what draws most symbols: a Lucide or soft symbol states no stroke or
+# fill of its own and leans on Frappe's `.icon` and `.soft-*` rules (scss/common/icons.scss),
+# which an image never sees -- without these a line icon is a solid black shape. Set on a group
+# around the glyph, so a symbol's own attributes (a duotone's `stroke="none"`) still win. The
+# stroke is heavier than the desk's 1.5, to sit with the Apps screen's drawn artwork.
+_GLYPH_CSS = (
+	".glyph{fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}"
+	".soft-body,.soft-layer{fill:currentColor;fill-opacity:.1}"
+	".soft-layer,.soft-accent{stroke:none}"
+	".soft-accent{fill:currentColor;fill-opacity:.5}"
+	".soft-accent-line{stroke-opacity:.5}"
+)
 
 
 def picture(icon: str | None, app: str | None, style: str | None) -> str | None:
@@ -88,9 +100,9 @@ def draw(icon: str | None, app: str | None, style: str | None) -> str | None:
 	return (
 		'<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54">'
 		# A duotone symbol paints with these; a line icon with `currentColor`.
-		f"<style>svg{{--duotone-dark:{ink};--duotone-light:{ink}8C;color:{ink}}}</style>"
+		f"<style>svg{{--duotone-dark:{ink};--duotone-light:{ink}8C;color:{ink}}}{_GLYPH_CSS}</style>"
 		f'<path d="{_TILE}" {square}/>'
-		f'<svg x="14" y="14" width="26" height="26" {attrs}>{inner}</svg>'
+		f'<g class="glyph"><svg x="14" y="14" width="26" height="26" {attrs}>{inner}</svg></g>'
 		"</svg>"
 	)
 

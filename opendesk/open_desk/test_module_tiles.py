@@ -44,6 +44,14 @@ class TestPicture(TestCase):
 		self.assertIn('fill="#0289F7" fill-opacity="0.19"', svg)
 		self.assertIn("--duotone-dark:#0289F7", svg)
 
+	def test_a_line_icon_is_stroked_not_filled(self):
+		# A Lucide symbol states no stroke or fill; the desk's CSS draws it, and an image has none.
+		svg = drawn("calculator-duotone")
+		self.assertIn(".glyph{fill:none;stroke:currentColor;", svg)
+		self.assertIn('<g class="glyph"><svg x="14"', svg)
+		# The symbol's own attributes stay on its own element, so they still win.
+		self.assertIn('viewBox="0 0 24 24" stroke="none">', svg)
+
 	def test_no_symbol_or_no_name_is_no_picture(self):
 		self.assertIsNone(drawn("not-an-icon"))
 		self.assertIsNone(drawn(None))
