@@ -16,7 +16,9 @@ Open Desk Settings:
 - **Override Desktop Icons.** Frappe's Apps screen (`/desk`) arranged in dock
   order: Frappe's default, one icon, an icon per module, the app and its
   modules, or none -- set per app in Manage Desk Apps (also in the Apps screen's
-  avatar menu). Only where Desktop Settings shows the Apps screen; Frappe's
+  avatar menu). A module tile shows its row's Apps Screen Image, else the
+  module's own icon on a tile in the Desk App's Color (else the app's colour).
+  Only where Desktop Settings shows the Apps screen; Frappe's
   older Desktop Icons grid, which it is retiring, is left as Frappe draws it.
 - **Move Help and Site Tools to User Menu.** The site's Navbar Settings rows and
   Help move from the sidebar header's menu into the user menu.

@@ -19,7 +19,8 @@ Each app on the dock, in dock order, as its Desk App's Apps Screen setting says:
 - Icon per Module: a tile for each of its modules, in its order -- and one for its
   frontend, first, if it has one -- each opening that module. A module's picture is its
   row's Apps Screen Image, else its own icon -- the one its sidebar header and the Dock
-  draw -- on a tile in its app's colour (`module_tiles`), else the letter Frappe draws.
+  draw -- on a tile in its Desk App's Color, else its app's colour (`module_tiles`), else
+  the letter Frappe draws.
   Not the artwork some apps ship under `public/icons/desktop_icons/`: that was drawn for
   the desktop before 16.50, for workspaces rather than modules, and matching it to a
   module by file name is guesswork.
