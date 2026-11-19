@@ -100,6 +100,8 @@ dock; they are not permission. A module a person cannot open is not in their
 import frappe
 from frappe import _
 
+from opendesk.open_desk import module_tiles
+
 APP = "Desk App"
 APP_MODULE = "Desk App Module"
 
@@ -129,7 +131,7 @@ TOP = "top"
 # handed to `resolve` as keywords and outlives a restart, so the key names its shape: change
 # what `_site_inputs` holds, and the version goes up, or new code would read an old copy
 # between a deploy's restart and its migrate.
-CACHE_KEY = "opendesk_dock:v2"
+CACHE_KEY = "opendesk_dock:v3"
 
 
 def extend_bootinfo(bootinfo: "frappe._dict") -> None:
@@ -441,6 +443,11 @@ def resolve(
 				continue
 
 		own_mark = app.get("logo") or app.get("icon")
+		color = app.get("color") or None
+		logo = app.get("logo") or (None if own_mark else _default_logo(target, meta))
+		if color and logo and not app.get("logo"):
+			# The installed app's own logo, in this record's colour where it can be redrawn.
+			logo = module_tiles.recoloured_logo(logo, color) or logo
 		frontend = _frontend(
 			app["title"],
 			app.get("frontend_url") or (frontends.get(target) if target else None),
@@ -458,7 +465,8 @@ def resolve(
 					**({"hidden": bool(app.get("hidden")), "roles": sorted(roles)} if everything else {}),
 					"title": app["title"],
 					"icon": app.get("icon") or None,
-					"logo": app.get("logo") or (None if own_mark else _default_logo(target, meta)),
+					"logo": logo,
+					"color": color,
 					"configured": True,
 					"modules": entries,
 					"frontend": frontend,
@@ -707,6 +715,7 @@ def _configured() -> list[dict]:
 			"title",
 			"icon",
 			"logo",
+			"color",
 			"frontend_url",
 			"frontend_label",
 			"installed_app",

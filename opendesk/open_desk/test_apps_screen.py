@@ -171,14 +171,55 @@ class TestArrange(TestCase):
 		with patch.object(
 			apps_screen.module_tiles,
 			"picture",
-			side_effect=lambda icon, app, style: asked.append((icon, app, style)) or f"data:{icon}",
+			side_effect=lambda icon, app, style, color=None: asked.append((icon, app, style, color))
+			or f"data:{icon}",
 		):
 			arrange(data, [oi], style="Subtle", module_sidebars={"Stock": {"app": "erpnext"}})
 		tiles = sorted((e for e in data if e["on_apps_screen"]), key=lambda e: e["sequence_id"])
 		self.assertEqual(
 			[t["app_logo_url"] for t in tiles], ["data:shelf-rack-duotone", "/files/members.png"]
 		)
-		self.assertEqual(asked, [("shelf-rack-duotone", "erpnext", "Subtle")])
+		self.assertEqual(asked, [("shelf-rack-duotone", "erpnext", "Subtle", None)])
+
+	def test_a_desk_apps_color_draws_its_module_tiles(self):
+		from unittest.mock import patch
+
+		from opendesk.open_desk import apps_screen
+
+		oi = dock_app("desk-app:OI", "desk-app:OI", "OI", modules=("Stock",), mode=PER_MODULE)
+		oi["modules"][0]["icon"] = "shelf-rack-duotone"
+		oi["color"] = "#2E7D32"
+		asked = []
+		with patch.object(
+			apps_screen.module_tiles,
+			"picture",
+			side_effect=lambda icon, app, style, color=None: asked.append(color) or "data:x",
+		):
+			arrange(app_data(), [oi], module_sidebars={"Stock": {"app": "erpnext"}})
+		self.assertEqual(asked, ["#2E7D32"])
+
+	def test_a_color_redraws_frappes_logo_when_the_record_has_none(self):
+		from unittest.mock import patch
+
+		from opendesk.open_desk import apps_screen
+
+		data = app_data()
+		erpnext = dock_app("app:erpnext", "erpnext", "ERPNext", modules=("Stock",), mode=ONE_ICON)
+		erpnext["color"] = "#2E7D32"
+		with patch.object(
+			apps_screen.module_tiles,
+			"recoloured_logo",
+			side_effect=lambda url, color: f"{url}?in={color}",
+		):
+			arrange(data, [erpnext])
+		entry = next(e for e in data if e["app_name"] == "erpnext")
+		self.assertEqual(entry["app_logo_url"], "/e.svg?in=#2E7D32")
+		# A logo of the record's own is drawn as it is.
+		data = app_data()
+		erpnext["logo"] = "/files/books.png"
+		arrange(data, [erpnext])
+		entry = next(e for e in data if e["app_name"] == "erpnext")
+		self.assertEqual(entry["app_logo_url"], "/files/books.png")
 
 	def test_plan_is_what_arrange_draws(self):
 		"""Manage Desk Apps previews the Apps screen from `plan`, so it must be the arrangement's own rule."""

@@ -16,8 +16,13 @@ A URL rather than the picture itself: a module's icon is a couple of kilobytes o
 boot carries every tile on every page load. The URL ends in a hash of the picture it draws, so
 it never changes what it shows, and the browser keeps each one rather than asking again.
 
-The app's colour is the one its shipped artwork is drawn in, else its logo's, else
-Frappe's grey -- read from the files, not kept here.
+The app's colour is its Desk App's Color, else the one its shipped artwork is drawn in,
+else its logo's, else Frappe's grey -- read from the files, not kept here.
+
+A Desk App's Color also redraws the app's own logo, when that logo is an installed app's
+SVG (`recoloured_logo`): its main colour -- the first fill it states, as `app_color` reads a
+logo -- is swapped for the new one wherever it appears. A logo in any other form is left as
+it is; uploading a logo on the Desk App is the way to change those.
 """
 
 import hashlib
@@ -50,30 +55,75 @@ _GLYPH_CSS = (
 )
 
 
-def picture(icon: str | None, app: str | None, style: str | None) -> str | None:
-	"""The tile for `icon`, in `app`'s colour, as a URL; None when no sprite has it."""
-	svg = draw(icon, app, style)
+def picture(icon: str | None, app: str | None, style: str | None, color: str | None = None) -> str | None:
+	"""The tile for `icon`, in `color` else `app`'s colour, as a URL; None when no sprite has it."""
+	color = hex_color(color)
+	svg = draw(icon, app, style, color)
 	if not svg:
 		return None
-	query = {"icon": icon, "app": app or "", "style": style or "", "v": _digest(svg)}
+	query = {"icon": icon, "app": app or "", "style": style or "", **({"color": color} if color else {})}
+	query["v"] = _digest(svg)
 	return f"/api/method/opendesk.open_desk.module_tiles.tile?{urlencode(query)}"
 
 
 @frappe.whitelist(methods=["GET"])
-def tile(icon: str, app: str | None = None, style: str | None = None) -> None:
+def tile(icon: str, app: str | None = None, style: str | None = None, color: str | None = None) -> None:
 	"""The picture `picture` points at, as an SVG image.
 
 	Kept by the browser for good: the URL carries a hash of the picture (`v`), so a changed
-	sprite or colour is a new URL. Drawn from the installed apps' own files and the icon's
-	name, which is checked, so it is the same for everyone who may see the desk.
+	sprite or colour is a new URL. Drawn from the installed apps' own files, the icon's
+	name and the colour, which are checked, so it is the same for everyone who may see the desk.
 	"""
-	svg = draw(icon, app or None, style or None)
+	svg = draw(icon, app or None, style or None, color or None)
 	if not svg:
 		# Not named back: `icon` is whatever the request said, and is only checked inside `draw`.
 		raise frappe.DoesNotExistError(_("No such icon."))
+	_send_svg(svg, f"{icon}.svg")
+
+
+def recoloured_logo(url: str | None, color: str | None) -> str | None:
+	"""`url`, an installed app's SVG logo, redrawn in `color`, as a URL; None when it cannot be."""
+	color = hex_color(color)
+	svg = recolour(url, color)
+	if not svg:
+		return None
+	query = {"src": url, "color": color, "v": _digest(svg)}
+	return f"/api/method/opendesk.open_desk.module_tiles.logo?{urlencode(query)}"
+
+
+@frappe.whitelist(methods=["GET"])
+def logo(src: str, color: str) -> None:
+	"""The picture `recoloured_logo` points at, as an SVG image; kept for good, as `tile` is.
+
+	Only an SVG file in an installed app's `public` folder is ever read (`_asset_path`).
+	"""
+	svg = recolour(src, color)
+	if not svg:
+		raise frappe.DoesNotExistError(_("No such logo."))
+	_send_svg(svg, "logo.svg")
+
+
+def recolour(url: str | None, color: str | None) -> str | None:
+	"""The SVG logo at `url` with its main colour swapped for `color`; None when it cannot be."""
+	color = hex_color(color)
+	path = _asset_path(url)
+	if not color or not path or not path.endswith(".svg"):
+		return None
+	return _recoloured(path, color)
+
+
+def hex_color(color: str | None) -> str | None:
+	"""`color` as `#RRGGBB`, or None when it is not a hex colour (`#RGB` is spelled out)."""
+	value = (color or "").strip()
+	if re.fullmatch(r"#[0-9A-Fa-f]{3}", value):
+		value = "#" + "".join(c * 2 for c in value[1:])
+	return value.upper() if re.fullmatch(r"#[0-9A-Fa-f]{6}", value) else None
+
+
+def _send_svg(svg: str, filename: str) -> None:
 	frappe.response.update(
 		type="download",
-		filename=f"{icon}.svg",
+		filename=filename,
 		filecontent=svg.encode(),
 		content_type="image/svg+xml",
 		display_content_as="inline",
@@ -85,15 +135,15 @@ def tile(icon: str, app: str | None = None, style: str | None = None) -> None:
 	headers["X-Content-Type-Options"] = "nosniff"
 
 
-def draw(icon: str | None, app: str | None, style: str | None) -> str | None:
-	"""The tile for `icon`, in `app`'s colour, as SVG source; None when no sprite has it."""
+def draw(icon: str | None, app: str | None, style: str | None, color: str | None = None) -> str | None:
+	"""The tile for `icon`, in `color` else `app`'s colour, as SVG source; None when no sprite has it."""
 	if not icon or not re.fullmatch(r"[\w-]+", icon):
 		return None
 	symbol = _symbols(tuple(frappe.get_installed_apps())).get(icon)
 	if not symbol:
 		return None
 	attrs, inner = symbol
-	color = app_color(app)
+	color = hex_color(color) or app_color(app)
 	subtle = (style or "Solid").lower() == "subtle"
 	square = f'fill="{color}" fill-opacity="0.19"' if subtle else f'fill="{color}"'
 	ink = color if subtle else "#FFFFFF"
@@ -166,10 +216,25 @@ def _app_colors(apps: tuple[str, ...]) -> dict[str, str]:
 	return colors
 
 
-def _asset_path(url: str) -> str | None:
-	"""The file behind an `/assets/<app>/...` URL, if it is one of an installed app's."""
+@lru_cache(maxsize=64)
+def _recoloured(path: str, color: str) -> str | None:
+	"""Read once per process, like the sprites: an app's files change only with a deploy."""
+	with open(path, encoding="utf-8") as f:
+		source = f.read()
+	main = next((fill for fill in _FILL.findall(source) if fill.upper() != "#FFFFFF"), None)
+	if not main:
+		return None
+	return re.sub(re.escape(main), color, source, flags=re.I)
+
+
+def _asset_path(url: str | None) -> str | None:
+	"""The file behind an `/assets/<app>/...` URL, if it is one of an installed app's public files."""
 	match = re.fullmatch(r"/?assets/([\w-]+)/(.+)", url or "")
 	if not match or match.group(1) not in frappe.get_installed_apps():
 		return None
-	path = os.path.join(frappe.get_app_path(match.group(1)), "public", match.group(2))
+	public = os.path.realpath(os.path.join(frappe.get_app_path(match.group(1)), "public"))
+	path = os.path.realpath(os.path.join(public, match.group(2)))
+	# A URL can come from a request (`logo`): nothing outside the app's public folder.
+	if not path.startswith(public + os.sep):
+		return None
 	return path if os.path.isfile(path) else None

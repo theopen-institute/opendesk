@@ -184,6 +184,7 @@ def _preview_tiles(app: dict, tiles: list[tuple], module_sidebars: dict, style: 
 				item.get("icon"),
 				((module_sidebars or {}).get(item["shell"]) or {}).get("app") or app.get("installed_app"),
 				style,
+				app.get("color"),
 			)
 			preview.append({"label": item["label"], "logo": picture, "icon": item.get("icon")})
 	return preview
@@ -394,7 +395,7 @@ def _is_placeholder(doc, default_title: str | None, hidden_by_default: bool = Fa
 		and (doc.module_mode or nav.ADD) == nav.ADD
 		and not doc.modules
 		and not doc.roles
-		and not (doc.icon or doc.logo or doc.frontend_url or doc.frontend_label)
+		and not (doc.icon or doc.logo or doc.color or doc.frontend_url or doc.frontend_label)
 		and (doc.apps_screen or apps_screen.DEFAULT) == apps_screen.DEFAULT
 		and doc.title == (default_title or doc.installed_app)
 	)

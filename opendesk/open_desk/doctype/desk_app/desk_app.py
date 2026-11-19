@@ -34,6 +34,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from opendesk.open_desk import module_tiles
 from opendesk.open_desk.desk_apps import (
 	ADD,
 	APP,
@@ -61,6 +62,7 @@ class DeskApp(Document):
 		)
 
 		apps_screen: DF.Literal["Default", "One Icon", "Icon per Module", "App and Module Icons", "Hidden"]
+		color: DF.Color | None
 		enabled: DF.Check
 		frontend_label: DF.Data | None
 		frontend_url: DF.Data | None
@@ -98,6 +100,11 @@ class DeskApp(Document):
 		self.icon = (self.icon or "").strip() or None
 		if self.icon and not re.fullmatch(r"[\w-]+", self.icon):
 			frappe.throw(_("{0} is not an icon name.").format(frappe.bold(self.icon)))
+		# Drawn into SVG pictures, so a hex colour and nothing else.
+		color = (self.color or "").strip()
+		self.color = module_tiles.hex_color(color)
+		if color and not self.color:
+			frappe.throw(_("{0} is not a colour: use one like #2E7D32.").format(frappe.bold(color)))
 
 	def validate_installed_app(self):
 		self.installed_app = (self.installed_app or "").strip() or None

@@ -4,7 +4,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "links": [],
- "modified": "2026-10-08 17:00:00.000000",
+ "modified": "2026-11-16 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Open Desk",
  "owner": "Administrator",
@@ -29,6 +29,7 @@
   "column_break_app",
   "icon",
   "logo",
+  "color",
   "modules_section",
   "module_mode",
   "apps_screen",
@@ -83,6 +84,12 @@
    "fieldtype": "Attach Image",
    "label": "Logo",
    "description": "Drawn on the dock in place of the icon."
+  },
+  {
+   "fieldname": "color",
+   "fieldtype": "Color",
+   "label": "Color",
+   "description": "The app's colour on the Apps screen: its module tiles are drawn in it rather than in the colour of the app's own artwork. With no logo uploaded here, an installed app's SVG logo is redrawn in it too, on the dock and the Apps screen: its main colour is swapped for this one. A logo in any other form stays as it is; upload one here to change it."
   },
   {
    "fieldname": "modules_section",

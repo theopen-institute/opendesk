@@ -147,6 +147,7 @@ def arrange(
 							((module_sidebars or {}).get(item["shell"]) or {}).get("app")
 							or app.get("installed_app"),
 							style,
+							app.get("color"),
 						),
 						sequence,
 						dock=[{"link_type": "Sidebar", "link_to": item["shell"]}],
@@ -202,6 +203,11 @@ def _app_tile(app_data: list[dict], by_name: dict, app: dict, sequence: int) -> 
 	entry.update(on_apps_screen=True, sequence_id=sequence, app_title=app["title"])
 	if app.get("logo"):
 		entry["app_logo_url"] = app["logo"]
+	elif app.get("color") and entry.get("app_logo_url"):
+		# An app with an icon of its own and no logo keeps Frappe's logo here, in its colour.
+		entry["app_logo_url"] = (
+			module_tiles.recoloured_logo(entry["app_logo_url"], app["color"]) or entry["app_logo_url"]
+		)
 	# An app Frappe does not know has no dock of its own; its modules lead into it, so the
 	# tile opens its first one even where the dock has not placed them.
 	if not entry.get("dock") and not entry.get("app_route"):

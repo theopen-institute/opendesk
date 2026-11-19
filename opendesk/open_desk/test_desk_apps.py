@@ -428,6 +428,25 @@ class TestBoundApps(TestCase):
 		)
 		self.assertEqual((entry["logo"], entry["frontend"]["url"]), ("/books.svg", "/books"))
 
+	def test_a_color_redraws_the_inherited_logo_but_not_its_own(self):
+		from unittest.mock import patch
+
+		from opendesk.open_desk import desk_apps
+
+		with patch.object(
+			desk_apps.module_tiles, "recoloured_logo", side_effect=lambda url, color: f"{url}?in={color}"
+		):
+			entry = titled(dock([{**bound("Books", "erpnext"), "color": "#2E7D32"}]), "Books")
+			self.assertEqual((entry["logo"], entry["color"]), ("/erpnext.svg?in=#2E7D32", "#2E7D32"))
+			entry = titled(
+				dock([{**bound("Books", "erpnext"), "color": "#2E7D32", "logo": "/books.svg"}]), "Books"
+			)
+			self.assertEqual(entry["logo"], "/books.svg")
+		# A logo that cannot be redrawn is kept as it is.
+		with patch.object(desk_apps.module_tiles, "recoloured_logo", return_value=None):
+			entry = titled(dock([{**bound("Books", "erpnext"), "color": "#2E7D32"}]), "Books")
+			self.assertEqual(entry["logo"], "/erpnext.svg")
+
 	def test_other_is_bindable(self):
 		result = dock([bound("Unsorted", OTHER)])
 		# Other's place: last.
@@ -811,6 +830,7 @@ class TestPlaceholder(TestCase):
 			"roles": [],
 			"icon": None,
 			"logo": None,
+			"color": None,
 			"frontend_url": None,
 			"frontend_label": None,
 			"apps_screen": "Default",
@@ -831,6 +851,11 @@ class TestPlaceholder(TestCase):
 	def test_a_place_or_a_setting_of_its_own_is_kept(self):
 		from opendesk.open_desk.arrange import _is_placeholder
 
-		for values in ({"dock_after": "top"}, {"apps_screen": "One Icon"}, {"title": "Calls"}):
+		for values in (
+			{"dock_after": "top"},
+			{"apps_screen": "One Icon"},
+			{"title": "Calls"},
+			{"color": "#2E7D32"},
+		):
 			with self.subTest(**values):
 				self.assertFalse(_is_placeholder(self.doc(**values), "Telephony"))
