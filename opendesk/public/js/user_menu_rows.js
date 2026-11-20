@@ -1,11 +1,18 @@
 // Rows of this app's own in the desk's user menu (your avatar).
 //
-// Frappe 16.50 builds the user menu in `Sidebar.create_user_menu`, for both the sidebar's user
-// button and the Dock's avatar, as a `frappe.ui.Dropdown` it makes there and does not hand back,
-// from a list of rows it writes inline. There is no hook to add a row. So for as long as that one
-// call runs, the first Dropdown made -- the user menu -- passes its rows through every change
-// registered here, in the order they were registered, and the call puts Frappe's Dropdown back
-// whatever happens. Any other Dropdown made meanwhile is Frappe's, untouched.
+// Frappe 16.60 lists the menu's rows in `Sidebar.user_menu_options`, which both the user menu
+// (`create_user_menu`, for the sidebar's user button and the Dock's avatar) and the phone's Profile
+// page read. Where that method is there, it is wrapped: its rows pass through every change
+// registered here, in the order they were registered. The Profile page only follows a row's `href`
+// or `onclick`, and leaves Manage Dock out because there is no dock on a phone to arrange; so
+// outside the user menu itself, a row it could not follow (a submenu alone, Help) or one marked
+// `menu_only` (Manage Desk Apps) is left out of what it lists.
+//
+// Frappe 16.50 to 16.5x builds the menu in `create_user_menu` alone, as a `frappe.ui.Dropdown` it
+// makes there and does not hand back, from a list of rows it writes inline. There is no hook to add
+// a row. So there, for as long as that one call runs, the first Dropdown made -- the user menu --
+// passes its rows through the same changes, and the call puts Frappe's Dropdown back whatever
+// happens. Any other Dropdown made meanwhile is Frappe's, untouched.
 //
 // A feature registers a change with `opendesk.user_menu.add(change)`, which says whether the change
 // will reach the menu -- so a feature that also takes a row away elsewhere can leave it there when
@@ -42,6 +49,26 @@ frappe.provide("opendesk.user_menu");
 		installed = true;
 
 		const create_user_menu = Sidebar.prototype.create_user_menu;
+		const user_menu_options = Sidebar.prototype.user_menu_options;
+		if (typeof user_menu_options === "function") {
+			// Counted, not flagged: a menu made while another is being made is still a menu.
+			let in_menu = 0;
+			Sidebar.prototype.create_user_menu = function () {
+				in_menu++;
+				try {
+					return create_user_menu.apply(this, arguments);
+				} finally {
+					in_menu--;
+				}
+			};
+			Sidebar.prototype.user_menu_options = function () {
+				const groups = apply_changes(user_menu_options.apply(this, arguments), this);
+				return in_menu ? groups : followable(groups);
+			};
+			return;
+		}
+
+		// Frappe before 16.60: the rows are written inline in `create_user_menu`.
 		Sidebar.prototype.create_user_menu = function () {
 			const sidebar = this;
 			const Dropdown = frappe.ui.Dropdown;
@@ -61,6 +88,22 @@ frappe.provide("opendesk.user_menu");
 				frappe.ui.Dropdown = Dropdown;
 			}
 		};
+	}
+
+	// The rows a list outside the menu (the phone's Profile page) can open: a link or a click, and
+	// not one kept to the menu. Frappe's own rows are all one or the other, and pass unchanged.
+	function followable(groups) {
+		if (!Array.isArray(groups)) return groups;
+		return groups.map((group) =>
+			group && Array.isArray(group.options)
+				? {
+						...group,
+						options: group.options.filter(
+							(row) => !row || ((row.href || row.onclick) && !row.menu_only)
+						),
+				  }
+				: group
+		);
 	}
 
 	function apply_changes(groups, sidebar) {

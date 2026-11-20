@@ -11,8 +11,9 @@ Open Desk Settings:
 - **Move Other Apps' Tiles to Dock.** Frappe puts Search and Notifications on
   a pinned dock; with this, the tiles other apps add beside them (such as
   Commons' To Do) move from the top of the sidebar onto the dock with them.
-- **Move Search and Notifications to Bottom of Dock.** All of those tiles at
-  the bottom of the dock, above the user menu, rather than under the logo.
+- **Move Search, Notifications, and Flow to Bottom of Dock.** The dock's own
+  tiles (Flow where installed), and other apps' beside them, at the bottom of
+  the dock, above the user menu, rather than under the logo.
 - **Override Desktop Icons.** Frappe's Apps screen (`/desk`) arranged in dock
   order: Frappe's default, one icon, an icon per module, the app and its
   modules, or none -- set per app in Manage Desk Apps (also in the Apps screen's

@@ -6,7 +6,7 @@
  "engine": "InnoDB",
  "issingle": 1,
  "links": [],
- "modified": "2026-10-28 13:00:00.000000",
+ "modified": "2026-11-20 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Open Desk",
  "name": "Open Desk Settings",
@@ -69,7 +69,7 @@
   },
   {
    "default": "1",
-   "description": "Below 768px, where the sidebar is a drawer opened from the button at the top left of the page, shows the dock in the drawer, left of the sidebar, so apps are picked there as on a wider screen. Turned off, the dock is hidden on phones, as Frappe hides it, and the menu at the top of the sidebar lists the apps.",
+   "description": "On phones, offers the dock's apps where Frappe offers its dock. Where the page title opens a sheet over the page (Frappe 16.60 and later), the sheet's row lists the dock's apps and the open app's modules, rather than Frappe's dock for the open app. Where the sidebar is a drawer opened from the button at the top left of the page, the dock is shown in the drawer, left of the sidebar. Turned off, phones get Frappe's own: the open app's modules in the sheet, or no dock in the drawer, the menu at the top of the sidebar listing the apps.",
    "fieldname": "show_dock_on_mobile",
    "fieldtype": "Check",
    "label": "Show Dock on Mobile",
@@ -104,8 +104,8 @@
    "default": "0",
    "fieldname": "dock_tools_at_bottom",
    "fieldtype": "Check",
-   "label": "Move Search and Notifications to Bottom of Dock",
-   "description": "Puts Search, Notifications, and any tiles other apps add beside them at the bottom of the dock, above the user menu, rather than at the top, under the site's logo. Needs Override Dock to be enabled.",
+   "label": "Move Search, Notifications, and Flow to Bottom of Dock",
+   "description": "Puts the dock's own tiles (Search, Notifications, and Flow where installed), and any tiles other apps add beside them, at the bottom of the dock, above the user menu, rather than at the top, under the site's logo. Needs Override Dock to be enabled.",
    "depends_on": "eval:doc.enable_dock"
   },
   {

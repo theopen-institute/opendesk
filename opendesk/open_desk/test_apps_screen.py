@@ -268,3 +268,27 @@ class TestArrange(TestCase):
 		data = app_data()
 		arrange(data, [dock_app("app:erpnext", "erpnext", "ERPNext", modules=("Accounts",))])
 		self.assertEqual(data[0]["dock"], [{"link_type": "Sidebar", "link_to": "Stock"}])
+
+
+class TestStudioApps(TestCase):
+	"""Frappe 16.60's Studio apps follow the arranged tiles, once, rather than being spliced in."""
+
+	def test_studio_apps_follow_the_arranged_tiles(self):
+		from opendesk.open_desk.apps_screen import fold_studio_apps
+
+		data = [
+			{"app_name": "erpnext", "on_apps_screen": True, "sequence_id": 3},
+			{"app_name": "frappe", "on_apps_screen": False, "sequence_id": 9},
+		]
+		studio = [
+			{"name": "shop", "app_title": "Shop", "route": "shop", "favicon": "/files/shop.png"},
+			{"name": "erpnext", "app_title": "Clash", "route": "x", "favicon": None},
+		]
+		fold_studio_apps(data, studio)
+		shop = data[-1]
+		self.assertEqual(len(data), 3)
+		self.assertEqual(
+			(shop["app_name"], shop["app_title"], shop["app_route"], shop["app_logo_url"]),
+			("shop", "Shop", "/shop", "/files/shop.png"),
+		)
+		self.assertEqual((shop["on_apps_screen"], shop["sequence_id"]), (True, 4))

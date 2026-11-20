@@ -15,12 +15,12 @@
 //     Spacers its Desk App sets, in place of Frappe's switcher rows;
 //   - the header names the app as well as the module, since the dock's lit tile is an app and
 //     Frappe's header names only the module;
-//   - Frappe puts Search and Notifications at the top of the dock while it is pinned (16.53,
-//     `Dock.render_utilities`). Other apps' tiles join them there (`opendesk.dock.tools`, below):
-//     Commons' To Do, say, opening its own panel the way the bell opens Notifications. Frappe's
-//     panels then open beside the dock, over the sidebar, rather than beside the sidebar. All of
-//     them can sit at the bottom of the dock instead, over the user menu ("Move Search and
-//     Notifications to Bottom of Dock");
+//   - Frappe puts Search and Notifications (and from 16.60 Flow, where installed) at the top of
+//     the dock while it is pinned (16.53, `Dock.render_utilities`). Other apps' tiles join them
+//     there (`opendesk.dock.tools`, below): Commons' To Do, say, opening its own panel the way the
+//     bell opens Notifications. Frappe's panels then open beside the dock, over the sidebar, rather
+//     than beside the sidebar. All of them can sit at the bottom of the dock instead, over the
+//     user menu ("Move Search, Notifications, and Flow to Bottom of Dock");
 //   - the user menu's Manage Dock, which arranges a Dock nothing draws while the dock is on, gives
 //     way to Manage Desk Apps, and a click on the module list's header opens Manage Modules for that
 //     app (both `js/arrange.js`). They arrange what the dock does draw, and it is redrawn in
@@ -1844,6 +1844,157 @@ opendesk.dock.tools = opendesk.dock.tools || [];
 		);
 	}
 
+	// Phones, from Frappe 16.60. There is no drawer: a tab bar runs along the bottom, and the page's
+	// title opens a sheet over the page, with a row of the open app's dock entries across its top
+	// and the module's sidebar under it (`frappe.ui.MobileNav`). With "Show Dock on Mobile" that row
+	// is the dock's: a tile for the app you are in, then its frontend and modules. The app's tile
+	// turns the row into the dock's apps; picking one shows its modules, and picking a module shows
+	// its sidebar below, as Frappe's row does. Nothing navigates until a sidebar row is picked.
+	// Without the setting, Frappe's own row lists the open app's modules, from the Dock rows
+	// `js/boot_arrangement.js` gives the dock's own apps.
+	//
+	// `MobileNav` comes in a bundle of its own once the screen is phone-sized, after this script,
+	// and makes its one instance as it loads; so its methods are patched as the class arrives,
+	// before that instance is made.
+	if (features.mobile_dock) {
+		when_defined(frappe.ui, "MobileNav", (MobileNav) => {
+			const proto = MobileNav && MobileNav.prototype;
+			if (
+				!proto ||
+				["render_dock", "open_navigation"].some((m) => typeof proto[m] !== "function")
+			) {
+				return;
+			}
+			patch(proto, "open_navigation", function (open_navigation) {
+				// Each sheet starts on the app you are in.
+				this.opendesk_sheet = null;
+				return open_navigation();
+			});
+			patch(proto, "render_dock", function (render_dock, [$dock]) {
+				draw_sheet_dock(this, $dock);
+			});
+		});
+	}
+
+	// Run `run` with `owner[key]` once it is set: now, or when it is first assigned.
+	function when_defined(owner, key, run) {
+		const ready = guarded(run);
+		if (owner[key]) {
+			ready(owner[key]);
+			return;
+		}
+		const descriptor = Object.getOwnPropertyDescriptor(owner, key);
+		if (descriptor && !descriptor.configurable) return;
+		Object.defineProperty(owner, key, {
+			configurable: true,
+			enumerable: true,
+			get: () => undefined,
+			set(value) {
+				Object.defineProperty(owner, key, {
+					value,
+					writable: true,
+					configurable: true,
+					enumerable: true,
+				});
+				ready(value);
+			},
+		});
+	}
+
+	// The sheet's row: the dock's apps, or one app's tile, frontend and modules. `nav.opendesk_sheet`
+	// is what the row is showing: `{apps}` while it lists the apps, `{app}` once one was picked.
+	function draw_sheet_dock(nav, $dock) {
+		const sidebar = frappe.app.sidebar;
+		const state = nav.opendesk_sheet || (nav.opendesk_sheet = { apps: false, app: null });
+		const here = dock_app_of(sidebar.current_module);
+		const app = state.app || here;
+		$dock.empty();
+		if (state.apps || !app) {
+			dock_apps
+				.filter((each) => choice_count(each))
+				.forEach((each) =>
+					sheet_tile($dock, {
+						label: __(each.title),
+						mark: app_mark(each),
+						active: each === here,
+						on_click: () => pick_sheet_app(nav, $dock, each),
+					})
+				);
+			return;
+		}
+		sheet_tile($dock, {
+			label: __(app.title),
+			mark: app_mark(app),
+			css_class: "opendesk-sheet-app",
+			on_click: () => {
+				state.apps = true;
+				draw_sheet_dock(nav, $dock);
+				$dock.find(".desk-mobile-sheet-dock-item").first().trigger("focus");
+			},
+		});
+		if (app.frontend) {
+			sheet_tile($dock, {
+				label: app.frontend.label,
+				mark: frappe.utils.icon("external-link", "md"),
+				on_click: () => {
+					nav.close_sheet();
+					visit_frontend(app);
+				},
+			});
+		}
+		module_layout(app).forEach(({ shell, label, icon }) =>
+			sheet_tile($dock, {
+				label,
+				mark: frappe.utils.icon(icon, "md"),
+				active: shell === sidebar.current_module,
+				on_click: () => browse_sheet_module(nav, $dock, shell),
+			})
+		);
+	}
+
+	// A tile drawn as Frappe draws the row's own (`MobileNav.render_dock`).
+	function sheet_tile($dock, { label, mark, active = false, css_class = "", on_click }) {
+		const $tile = $(`<button type="button" class="desk-mobile-sheet-dock-item">
+			<span class="dock-item-icon"></span>
+			<span class="dock-item-label"></span>
+		</button>`)
+			.addClass(css_class)
+			.toggleClass("active", active)
+			.on("click", guarded(on_click));
+		$tile.find(".dock-item-icon").html(mark);
+		$tile.find(".dock-item-label").text(label);
+		return $tile.appendTo($dock);
+	}
+
+	// An app picked in the sheet: its modules in the row, under its name. One with a single module
+	// shows that module's sidebar at once; one with only a frontend opens it.
+	function pick_sheet_app(nav, $dock, app) {
+		const modules = modules_of(app);
+		if (!modules.length) {
+			nav.close_sheet();
+			if (app.frontend) visit_frontend(app);
+			return;
+		}
+		nav.opendesk_sheet = { apps: false, app };
+		if (modules.length === 1 && !app.frontend) {
+			browse_sheet_module(nav, $dock, modules[0].shell);
+			return;
+		}
+		if (nav.sheet) nav.sheet.set_title(__(app.title));
+		draw_sheet_dock(nav, $dock);
+		$dock.find(".desk-mobile-sheet-dock-item").first().trigger("focus");
+	}
+
+	// A module picked in the sheet: its sidebar under the row, as Frappe's `browse_dock_entry` does.
+	function browse_sheet_module(nav, $dock, shell) {
+		frappe.app.sidebar.select_shell(shell);
+		nav.opendesk_sheet = { apps: false, app: dock_app_of(shell) };
+		if (nav.sheet) nav.sheet.set_title(nav.module_label(shell));
+		draw_sheet_dock(nav, $dock);
+		// The tapped tile was just rebuilt; focus left on <body> would miss the sheet's Escape.
+		$dock.find(".active").trigger("focus");
+	}
+
 	// Other apps' tiles, on the dock under Frappe's Search and Notifications, which Frappe puts at
 	// its top (`Dock.render_utilities`) while it is pinned or the page has no sidebar. Made with
 	// Frappe's own `make_utility`, they come and go with that pair. Built once, with the Dock.
@@ -1916,6 +2067,9 @@ opendesk.dock.tools = opendesk.dock.tools || [];
 		icon: "monitor",
 		condition: () => !broken && can_manage(),
 		onclick: () => opendesk.dock.manage_dock(),
+		// Not on the phone's Profile page, which leaves Frappe's Manage Dock out too: a phone has no
+		// dock to arrange (`public/js/user_menu_rows.js`).
+		menu_only: true,
 	};
 	opendesk.user_menu.add((groups) =>
 		groups.map((group) =>

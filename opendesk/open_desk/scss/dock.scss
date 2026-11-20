@@ -186,7 +186,7 @@ body.opendesk-dock-on .dock .dock-utilities {
 	}
 }
 
-// With "Move Search and Notifications to Bottom of Dock" (`opendesk-dock-tools-bottom`) the slot
+// With "Move Search, Notifications, and Flow to Bottom of Dock" (`opendesk-dock-tools-bottom`) the slot
 // sits over the user menu (`js/dock.js` moves it), so its rule is the one above it, and the tiles
 // start under the mark's band as they do where the slot is empty (Frappe's `.dock-logo +
 // .dock-utilities:empty + .dock-items`).
@@ -223,11 +223,13 @@ body.opendesk-dock-tools-bottom .dock {
 }
 
 @media (max-width: 767px) {
-	// Frappe takes its pair out of the band beside a pinned dock from 768px up only; below, the
-	// dock is pinned in the drawer by Open Desk, so the band loses them here too.
+	// Frappe takes its own tiles (Search, Notifications, and Flow where installed) out of the band
+	// beside a pinned dock from 768px up only; below, the dock is pinned in the drawer by Open
+	// Desk, so the band loses them here too.
 	body.opendesk-mobile-dock-on.dock-pinned.dock-active .body-sidebar .standard-items-band {
 		> .navbar-modal-search-mobile,
-		> .sidebar-notification {
+		> .sidebar-notification,
+		> .sidebar-flow {
 			display: none;
 		}
 	}
@@ -725,6 +727,13 @@ body.opendesk-tabs-on {
 	// Beside a pinned dock the band starts where the dock ends; a floating dock is drawn over it.
 	&.dock-pinned.dock-active .opendesk-module-tabs {
 		left: calc(var(--dock-width) + 1px);
+	}
+
+	// Frappe 16.60's Flow panel, docked, is fixed at the window's right edge; the page makes room
+	// for it with a margin on <html>, which a fixed band does not follow. So the band ends where
+	// the panel begins, and its ResizeObserver (`tabs_of`) fits the tabs to the narrower band.
+	html[data-flow-docked] & .opendesk-module-tabs:not(.hidden) {
+		right: var(--flow-dock-width, 0px);
 	}
 
 	.body-sidebar-container,

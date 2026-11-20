@@ -29,6 +29,7 @@ Each app on the dock, in dock order, as its Desk App's Apps Screen setting says:
 - Hidden: no tile; it stays on the dock.
 
 An app taken off the dock is off the Apps screen too, and every other entry is turned off.
+Frappe 16.60's Studio apps follow every arranged tile (`fold_studio_apps`).
 
 A tile that leads to `/app/...`, the desk's address before 16.50, is pointed at the same page
 under `/desk/...`. Frappe's own `app_home` is still `/app/build`: the desk does not treat that
@@ -81,6 +82,9 @@ def extend_bootinfo(bootinfo: "frappe._dict") -> None:
 			style=bootinfo.get("desktop_icon_style"),
 			module_sidebars=bootinfo.get("module_sidebars"),
 		)
+		if bootinfo.get("studio_apps"):
+			fold_studio_apps(app_data, bootinfo.studio_apps)
+			bootinfo.studio_apps = []
 		bootinfo.app_data = app_data
 	except Exception:
 		# The boot is every page load; a broken arrangement leaves Frappe's own screen.
@@ -88,6 +92,37 @@ def extend_bootinfo(bootinfo: "frappe._dict") -> None:
 
 
 MODES = (DEFAULT, ONE_ICON, PER_MODULE, BOTH, HIDDEN)
+
+
+def fold_studio_apps(app_data: list[dict], studio_apps: list[dict]) -> None:
+	"""Frappe 16.60's Studio apps as Apps screen tiles of `app_data`, after the arranged ones.
+
+	Frappe sends a site's published Studio apps apart (`bootinfo.studio_apps`) and splices them in
+	among the Apps screen's tiles in the browser, before Frappe's own tile (`get_apps_screen_apps`)
+	-- which, once the screen is arranged, is wherever the dock order put that tile, or nowhere.
+	They are no dock app, so the dock order has no place for them; they follow every arranged
+	tile, in Frappe's order, made as Frappe makes them. The boot's list is then emptied, so they
+	are not drawn twice. Manage Desk Apps' preview does not show them: they are not its to arrange.
+	"""
+	known = {entry.get("app_name") for entry in app_data}
+	sequence = max(
+		(entry.get("sequence_id") or 0 for entry in app_data if entry.get("on_apps_screen")), default=0
+	)
+	for app in studio_apps or []:
+		name = app.get("name")
+		if not name or name in known:
+			continue
+		sequence += 1
+		known.add(name)
+		app_data.append(
+			_tile(
+				name,
+				app.get("app_title") or name,
+				app.get("favicon"),
+				sequence,
+				route=f"/{app.get('route') or ''}",
+			)
+		)
 
 
 def enabled() -> bool:

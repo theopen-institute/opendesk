@@ -56,6 +56,13 @@ frappe.provide("opendesk.boot_arrangement");
 		});
 	}
 
+	// An added entry's Dock: one Sidebar row per module of the dock app, in its order. Frappe reads
+	// an app's `dock` wherever it asks what is in an app -- the phone's navigation sheet
+	// (`MobileNav.render_dock`, 16.60), an app's landing page (`app_landing_route`) -- and an entry
+	// with none reads as an app with nothing in it.
+	const dock_rows = (app) =>
+		(app.modules || []).map((module) => ({ link_type: "Sidebar", link_to: module.shell }));
+
 	// A dock app Frappe does not know gets an entry of its own, kept off the Apps screen; a bound
 	// one gives Frappe's entry its title and logo.
 	function add_dock_entries(app_data) {
@@ -63,6 +70,15 @@ frappe.provide("opendesk.boot_arrangement");
 		const known = new Map(app_data.map((entry) => [entry.app_name, entry]));
 		dock.forEach((app) => {
 			const entry = known.get(app.app_name);
+			if (entry && added_entries.has(entry)) {
+				// Placed again after an editor's save: the app as it is now.
+				Object.assign(entry, {
+					app_title: app.title,
+					app_logo_url: app.logo || null,
+					dock: dock_rows(app),
+				});
+				return;
+			}
 			if (entry) {
 				if (app.configured) {
 					if (!retitled.has(entry)) {
@@ -84,7 +100,7 @@ frappe.provide("opendesk.boot_arrangement");
 				desk_route: "",
 				on_apps_screen: false,
 				sequence_id: 100,
-				dock: [],
+				dock: dock_rows(app),
 			};
 			app_data.push(added);
 			added_entries.add(added);

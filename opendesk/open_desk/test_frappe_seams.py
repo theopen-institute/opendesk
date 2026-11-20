@@ -264,18 +264,20 @@ SEAMS = {
 }
 
 # What a method does inside, where its name alone says too little. Read from the method's body.
+# A tuple is a choice: any one of its strings will do, where Frappe's versions differ harmlessly.
 METHOD_BODIES = {
 	("ui", "sidebar", "sidebar.js"): {
-		# `user_menu_rows.js` edits the first Dropdown this makes, from its options array, and the
-		# dock finds Manage Dock among its rows.
-		"create_user_menu": ["new frappe.ui.Dropdown({", "options: [", '"workspace-selector"'],
 		# The dock keeps its own copy of this click-away, letting through a pick that rebuilt the
-		# drawer (`js/dock.js`): a change here is a change to copy there.
+		# drawer (`js/dock.js`): a change here is a change to copy there. 16.60 dropped the page
+		# head's drawer button from the selector; the copy keeps it, matching nothing there.
 		"setup_click_away": [
 			'.off(".sidebar-click-away")',
 			'"click.sidebar-click-away"',
 			"if (!this.sidebar_expanded || !this.panel_can_close()) return;",
-			'".body-sidebar, .dock, .sidebar-toggle-btn, .sidebar-panel, .sidebar-collapse-arrow"',
+			(
+				'".body-sidebar, .dock, .sidebar-toggle-btn, .sidebar-panel, .sidebar-collapse-arrow"',
+				'".body-sidebar, .dock, .sidebar-panel, .sidebar-collapse-arrow"',
+			),
 			"this.close();",
 		],
 	},
@@ -293,10 +295,49 @@ METHOD_BODIES = {
 	},
 }
 
-# The sidebar's standard items, by class: Frappe draws these two on a pinned dock too, and Open Desk
+# The sidebar's standard items, by class: Frappe draws these on a pinned dock too, and Open Desk
 # hides the band beside it (`scss/dock.scss`). Anything else Frappe puts in the band would be out
-# of reach.
-STANDARD_ITEMS = {"navbar-modal-search-mobile", "sidebar-notification hidden"}
+# of reach. 16.60 adds Flow, which it draws on the dock as well (`render_utilities`).
+STANDARD_ITEMS = (
+	{"navbar-modal-search-mobile", "sidebar-notification hidden"},
+	{"navbar-modal-search-mobile", "sidebar-notification hidden", "sidebar-flow"},
+)
+
+# Classes `scss/dock.scss` styles ahead of the Frappe that draws them, by the Frappe folder whose
+# presence says it does: harmless where absent, and looked for wherever that folder is.
+LATER_CLASSES = {"sidebar-flow": ("flow",)}
+
+# The phone's tab bar and navigation sheet (16.60): what `js/dock.js` patches in it, and the Dock
+# rows its sheet reads (`js/boot_arrangement.js`). Checked only where Frappe has it.
+MOBILE_NAV = ("ui", "mobile_nav.js")
+MOBILE_NAV_SEAMS = [
+	"frappe.ui.MobileNav = class",
+	"open_navigation() {",
+	"render_dock($dock) {",
+	"collect_dock_entries(sidebar.get_sidebar_app())",
+	"$items_container.appendTo",
+	"desk-mobile-sheet-dock-item",
+	"this.sheet.set_title(",
+	"module_label(module) {",
+	"close_sheet() {",
+	"frappe.ui.mobile_nav = new frappe.ui.MobileNav();",
+]
+
+# Frappe 16.60's Studio apps, which `apps_screen.fold_studio_apps` makes tiles of as Frappe's
+# browser half does. Checked only where the boot sends them.
+STUDIO_SEAMS = {
+	("boot.py",): ["bootinfo.studio_apps = get_desktop_apps()"],
+	("public", "js", "frappe", "utils", "utils.js"): [
+		"(frappe.boot.studio_apps || [])",
+		"app_name: app.name",
+		"app_title: app.app_title",
+		"app_route: `/${app.route}`",
+		"app_logo_url: app.favicon",
+	],
+	("studio", "doctype", "studio_app", "studio_app.py"): [
+		".select(StudioApp.name, StudioApp.app_title, StudioApp.route, StudioApp.favicon)"
+	],
+}
 
 # The boot data the server half reads, by the source that shapes it.
 PYTHON_SEAMS = {
@@ -494,6 +535,9 @@ class TestFrappeSeams(TestCase):
 		frappe_source = "\n".join(frappe_source)
 
 		for name in sorted(classes):
+			later = LATER_CLASSES.get(name)
+			if later and not os.path.isdir(_frappe_path(*later)):
+				continue
 			with self.subTest(css_class=name):
 				found = re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", frappe_source)
 				self.assertTrue(found, f".{name} is styled by dock.scss but is not in Frappe")
@@ -554,19 +598,66 @@ class TestFrappeSeams(TestCase):
 			for name, texts in methods.items():
 				body = re.search(rf"(?ms)^\t{name}\(.*?\) \{{\n.*?^\t\}}\n", source)
 				for text in texts:
-					with self.subTest(method=name, string=text):
-						self.assertTrue(body and text in body.group(0), f"{text!r} is not in {name}()")
+					choices = text if isinstance(text, tuple) else (text,)
+					with self.subTest(method=name, string=choices[0]):
+						self.assertTrue(
+							body and any(choice in body.group(0) for choice in choices),
+							f"{choices[0]!r} is not in {name}()",
+						)
 
-	def test_the_standard_items_are_the_two_the_dock_redraws(self):
+	def test_the_user_menu_rows_are_where_open_desk_changes_them(self):
+		"""`public/js/user_menu_rows.js` changes the menu's rows, and the dock finds Manage Dock there.
+
+		16.60 lists them in `user_menu_options`, which the menu and the phone's Profile page read;
+		before, `create_user_menu` wrote them inline into the first Dropdown it made.
+		"""
+		source = _source(*JS, "ui", "sidebar", "sidebar.js")
+
+		def body(name):
+			found = re.search(rf"(?ms)^\t{name}\(.*?\) \{{\n.*?^\t\}}\n", source)
+			return found.group(0) if found else ""
+
+		menu = body("create_user_menu")
+		self.assertIn("new frappe.ui.Dropdown({", menu)
+		rows = body("user_menu_options") if "options: this.user_menu_options()" in menu else menu
+		self.assertIn("options: [", rows)
+		self.assertIn('"workspace-selector"', rows)
+
+	def test_the_phone_navigation_sheet_is_what_the_dock_patches(self):
+		if not os.path.isfile(_frappe_path(*JS, *MOBILE_NAV)):
+			self.skipTest("this Frappe has no phone tab bar (16.60)")
+		source = _source(*JS, *MOBILE_NAV)
+		for text in MOBILE_NAV_SEAMS:
+			with self.subTest(string=text):
+				self.assertIn(text, source)
+		# The sheet is the phone's way to the sidebar: the page head's drawer button is gone, so the
+		# dock in the drawer (`scss/dock.scss`) is out of reach and only the sheet's row matters.
+		self.assertNotIn("sidebar-toggle-btn", _source(*JS, "ui", "page.html"))
+
+	def test_studio_apps_are_still_tiles_open_desk_can_make(self):
+		if "bootinfo.studio_apps" not in _source("boot.py"):
+			self.skipTest("this Frappe sends no Studio apps (16.60)")
+		for parts, texts in STUDIO_SEAMS.items():
+			source = _source(*parts)
+			for text in texts:
+				with self.subTest(path=os.path.join(*parts), string=text):
+					self.assertIn(text, source)
+
+	def test_the_standard_items_are_the_ones_the_dock_redraws(self):
 		source = _source(*JS, "ui", "sidebar", "sidebar.js")
 		body = re.search(r"(?ms)^\tadd_standard_items\(.*?\) \{\n.*?^\t\}\n", source)
 		self.assertTrue(body, "add_standard_items() is not in sidebar.js")
-		self.assertEqual(
-			set(re.findall(r'class: "([^"]+)"', body.group(0))),
+		classes = set(re.findall(r'class: "([^"]+)"', body.group(0)))
+		self.assertIn(
+			classes,
 			STANDARD_ITEMS,
-			"Frappe's sidebar band changed: beside the dock it is hidden, and only Search and "
-			"Notifications are drawn again on the dock",
+			"Frappe's sidebar band changed: beside the dock it is hidden, and only Search, "
+			"Notifications and Flow are drawn again on the dock",
 		)
+		if "sidebar-flow" in classes:
+			dock = _source(*JS, "ui", "sidebar", "dock.js")
+			utilities = re.search(r"(?ms)^\trender_utilities\(.*?\) \{\n.*?^\t\}\n", dock)
+			self.assertTrue(utilities and "window.flow?.toggle()" in utilities.group(0))
 
 	def test_the_boot_data_keeps_its_shape(self):
 		for parts, texts in PYTHON_SEAMS.items():
